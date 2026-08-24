@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: intentguard
+
+server:
+  port: 8080
+
+intentguard:
+  # Reference-monitor identity (Req 1.1, 1.2): the Enforcement_Engine runs under a dedicated
+  # service account distinct from any monitored user.
+  service-account: intentguard
+
+  # Shell_Hook synchronous blocking gate. The Unix domain socket is owned by the service
+  # account; monitored users may write requests but cannot alter engine state through it.
+  socket:
+    path: /var/run/intentguard/intentguard.sock
+
+  # MongoDB Datastore connection (Behavioral_Profiles, Intent_Sessions, Audit_History, config).
+  mongo:
+    connection-string: mongodb://localhost:27017
+    database: intentguard
+
+  # Google Gemini LLM_Service via the native Google Gemini Java SDK (com.google.genai).
+  # Supply the key via environment variable: export GEMINI_API_KEY="your-key"
+  # The Java SDK uses short model names WITHOUT the "models/" prefix.
+  llm:
+    api-key: ${GEMINI_API_KEY:}
+    model: gemini-2.5-flash
+    timeout-ms: 1200
+
+  # Indian-language text translation via Gemini Generate API. The API key resolves from
+  # TRANSLATION_API_KEY if set, otherwise falls back to GEMINI_API_KEY; blank disables
+  # text translation at startup (content stays English).
+  translation:
+    provider: gemini
+    api-key: ${TRANSLATION_API_KEY:${GEMINI_API_KEY:}}
+    timeout-ms: 2000
+    sensitive-content-translatable: false
+
+  # Speech-to-text / text-to-speech via Gemini multimodal API. The API key resolves from
+  # SPEECH_API_KEY if set, otherwise falls back to GEMINI_API_KEY; blank disables the
+  # speech capability at startup.
+  speech:
+    provider: gemini
+    api-key: ${SPEECH_API_KEY:${GEMINI_API_KEY:}}
+    stt-timeout-ms: 10000
+    tts-timeout-ms: 5000
+
+  # Decision budget and timing bounds (see Threshold_Configuration in the design).
+  decision:
+    budget-ms: 2000
+    monitoring-gap-timeout-ms: 5000
+    confirmation-timeout-ms: 15000
+    correlation-window-ms: 1000
+    learning-min-events: 200
+
+  # NL Operations Assistant — natural-language to scored shell commands. Generates 2–3
+  # safe alternatives per query, scores them through the full safety pipeline, and executes
+  # only after explicit operator confirmation. Sessions auto-close after idle timeout.
+  assist:
+    session-timeout-ms: 300000       # 5 minutes idle timeout before session auto-close
+    rate-limit-per-minute: 10        # per-operator NL_Query submissions per minute
+    execution-timeout-ms: 30000      # 30 seconds max for command execution via ProcessBuilder
+    blocklist:                       # regex patterns unconditionally blocked from generation
+      - "rm\\s+-rf\\s+/(?:\\s|$)"
+      - "mkfs"
+      - "rmmod"
+      - "modprobe\\s+-r"
+
+logging:
+  level:
+    com.intentguard: INFO

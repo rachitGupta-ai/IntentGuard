@@ -1,0 +1,27 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Python venvs
+.venv/
+*/.venv/
+triage-sidecar/.venv/
+
+# jqwik
+.jqwik-database
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Kiro
+.kiro/
+
+# OS
+.DS_Store
+
+# Secrets / local env
+.env

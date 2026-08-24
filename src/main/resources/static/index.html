@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IntentGuard Control Tower</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">IG</span>
+      <div>
+        <h1>IntentGuard Control Tower</h1>
+        <p class="tagline">Semantic firewall for the Linux command layer</p>
+      </div>
+    </div>
+    <div class="conn">
+      <span id="conn-dot" class="dot dot-off" aria-hidden="true"></span>
+      <span id="conn-label">connecting…</span>
+    </div>
+  </header>
+
+  <main class="grid">
+    <!-- Active Intent_Sessions (Req 12.1) -->
+    <section class="panel" id="panel-sessions">
+      <h2>Active Intent Sessions</h2>
+      <p class="hint">Select a session to inspect its intent-vs-action divergence.</p>
+      <ul id="sessions-list" class="sessions-list">
+        <li class="empty">No active sessions yet.</li>
+      </ul>
+    </section>
+
+    <!-- Risk timeline (Req 12.2) -->
+    <section class="panel" id="panel-timeline">
+      <h2>Risk Timeline</h2>
+      <p class="hint">Divergence scores over time. Red = block, amber = ask, green = allow.</p>
+      <canvas id="timeline-canvas" width="720" height="160" aria-label="Divergence score timeline"></canvas>
+      <ul id="timeline-list" class="timeline-list"></ul>
+    </section>
+
+    <!-- Intent vs action divergence (Req 12.3) -->
+    <section class="panel" id="panel-divergence">
+      <h2>Intent vs Action</h2>
+      <div id="divergence-header" class="divergence-header">
+        <span class="muted">No session selected.</span>
+      </div>
+      <ul id="divergence-list" class="divergence-list"></ul>
+    </section>
+
+    <!-- Pending asks with confirm/block controls (Req 12.5) -->
+    <section class="panel" id="panel-asks">
+      <h2>Pending Confirmations</h2>
+      <p class="hint">Commands awaiting an administrator decision.</p>
+      <ul id="asks-list" class="asks-list">
+        <li class="empty">Nothing awaiting confirmation.</li>
+      </ul>
+    </section>
+
+    <!-- Explanations on flagged events (Req 12.4) -->
+    <section class="panel" id="panel-explanations">
+      <h2>Flagged Event Explanations</h2>
+      <ul id="explanations-list" class="explanations-list">
+        <li class="empty">No flagged events yet.</li>
+      </ul>
+    </section>
+
+    <!-- Alerts -->
+    <section class="panel" id="panel-alerts">
+      <h2>Alerts</h2>
+      <ul id="alerts-list" class="alerts-list">
+        <li class="empty">No alerts.</li>
+      </ul>
+    </section>
+
+    <!-- Threshold configuration (PUT /api/thresholds) -->
+    <section class="panel" id="panel-thresholds">
+      <h2>Threshold Configuration</h2>
+      <form id="threshold-form" class="threshold-form">
+        <div class="field">
+          <label for="askThreshold">Ask threshold</label>
+          <input type="number" id="askThreshold" name="askThreshold" step="0.01" min="0" max="1" value="0.4" />
+        </div>
+        <div class="field">
+          <label for="blockThreshold">Block threshold</label>
+          <input type="number" id="blockThreshold" name="blockThreshold" step="0.01" min="0" max="1" value="0.7" />
+        </div>
+        <fieldset class="weights">
+          <legend>Component weights</legend>
+          <div class="field">
+            <label for="w-seq">Sequence surprise</label>
+            <input type="number" id="w-seq" data-component="SEQUENCE_SURPRISE" step="0.01" min="0" value="0.25" />
+          </div>
+          <div class="field">
+            <label for="w-ctx">Context mismatch</label>
+            <input type="number" id="w-ctx" data-component="CONTEXT_MISMATCH" step="0.01" min="0" value="0.20" />
+          </div>
+          <div class="field">
+            <label for="w-beh">Behavioral deviation</label>
+            <input type="number" id="w-beh" data-component="BEHAVIORAL_DEVIATION" step="0.01" min="0" value="0.25" />
+          </div>
+          <div class="field">
+            <label for="w-sem">Semantic inconsistency</label>
+            <input type="number" id="w-sem" data-component="SEMANTIC_INCONSISTENCY" step="0.01" min="0" value="0.30" />
+          </div>
+        </fieldset>
+        <div class="field">
+          <label for="inferredIntentSemanticWeight">Inferred-intent semantic weight</label>
+          <input type="number" id="inferredIntentSemanticWeight" step="0.01" min="0" value="0.15" />
+        </div>
+        <div class="field">
+          <label for="learningMinEvents">Learning min events</label>
+          <input type="number" id="learningMinEvents" step="1" min="1" value="200" />
+        </div>
+        <div class="field">
+          <label for="monitoringGapTimeoutMs">Monitoring gap timeout (ms)</label>
+          <input type="number" id="monitoringGapTimeoutMs" step="1" min="1" value="5000" />
+        </div>
+        <div class="field">
+          <label for="confirmationTimeoutMs">Confirmation timeout (ms)</label>
+          <input type="number" id="confirmationTimeoutMs" step="1" min="1" value="15000" />
+        </div>
+        <div class="field">
+          <label for="llmTimeoutMs">LLM timeout (ms)</label>
+          <input type="number" id="llmTimeoutMs" step="1" min="1" value="1200" />
+        </div>
+        <div class="field">
+          <label for="correlationWindowMs">Correlation window (ms)</label>
+          <input type="number" id="correlationWindowMs" step="1" min="1" value="1000" />
+        </div>
+        <button type="submit" class="btn btn-primary">Apply thresholds</button>
+        <p id="threshold-status" class="threshold-status" role="status"></p>
+      </form>
+    </section>
+
+    <!-- Audit history query (GET /api/history) -->
+    <section class="panel" id="panel-history">
+      <h2>Audit History</h2>
+      <form id="history-form" class="history-form">
+        <div class="field">
+          <label for="history-user">User ID</label>
+          <input type="text" id="history-user" placeholder="alice" />
+        </div>
+        <div class="field">
+          <label for="history-from">From (epoch ms)</label>
+          <input type="number" id="history-from" value="0" />
+        </div>
+        <div class="field">
+          <label for="history-to">To (epoch ms)</label>
+          <input type="number" id="history-to" value="9999999999999" />
+        </div>
+        <button type="submit" class="btn">Query</button>
+      </form>
+      <ul id="history-list" class="history-list"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

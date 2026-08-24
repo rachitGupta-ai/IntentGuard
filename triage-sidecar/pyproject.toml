@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alert-triage-sidecar"
+version = "0.1.0"
+description = "Advisory, read-only LangGraph alert-triage sidecar for the IntentGuard semantic firewall."
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph==0.2.76",
+    "pydantic==2.9.2",
+    "google-generativeai==0.8.3",
+    "openai==1.55.0",
+    "httpx==0.27.2",
+    "fastapi==0.115.5",
+    "uvicorn==0.32.1",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==8.3.4",
+    "hypothesis==6.122.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sidecar*"]
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Property-based tests are marked with `property` so they can be selected or
+# excluded independently of example-based unit tests (e.g. `pytest -m property`).
+markers = [
+    "property: property-based (Hypothesis) test validating a design correctness property",
+    "smoke: lightweight configuration/wiring assertion",
+    "integration: exercises an external engine/harness boundary",
+]
+addopts = "-ra --strict-markers"
