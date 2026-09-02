@@ -8,7 +8,10 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Filters.gte;
+import static com.mongodb.client.model.Filters.or;
 import com.mongodb.client.model.ReplaceOptions;
+import com.mongodb.client.model.Sorts;
 
 /**
  * Repository for the {@code intent_sessions} collection (Req 4.1, 4.5). Sessions are keyed by
@@ -41,5 +44,18 @@ public class IntentSessionRepository {
     public Optional<IntentSessionDocument> findOpenByUserId(String userId) {
         return Optional.ofNullable(
                 collection.find(and(eq("userId", userId), eq("open", true))).first());
+    }
+
+    /**
+     * Returns sessions that are either still open or were started at/after {@code sinceMs},
+     * ordered oldest-first. Used to hydrate the Control_Tower "active sessions" panel on a fresh
+     * page load from persisted state.
+     */
+    public java.util.List<IntentSessionDocument> findRecentOrOpen(long sinceMs) {
+        java.util.List<IntentSessionDocument> results = new java.util.ArrayList<>();
+        collection.find(or(eq("open", true), gte("startedAt", sinceMs)))
+                .sort(Sorts.ascending("startedAt"))
+                .into(results);
+        return results;
     }
 }

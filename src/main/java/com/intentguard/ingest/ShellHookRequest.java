@@ -5,6 +5,7 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.intentguard.domain.Actor;
 import com.intentguard.domain.ActorType;
+import com.intentguard.domain.AgentRiskMarkers;
 import com.intentguard.domain.InputOrigin;
 import com.intentguard.domain.RawShellSignal;
 
@@ -33,7 +34,10 @@ public record ShellHookRequest(
         String cwd,
         Map<String, String> envContext,
         Long timestamp,
-        InputOrigin inputOrigin) {
+        InputOrigin inputOrigin,
+        Boolean opensOutboundConnection,
+        Boolean accessesSecret,
+        Boolean privilegeEscalation) {
 
     /** Convert this wire request into a domain {@link RawShellSignal}, applying safe defaults. */
     public RawShellSignal toDomain() {
@@ -44,12 +48,17 @@ public record ShellHookRequest(
                         ? new Actor(ActorType.AGENT, user, humanPrincipalId)
                         : new Actor(ActorType.HUMAN, user, null);
         long ts = timestamp == null ? System.currentTimeMillis() : timestamp.longValue();
+        AgentRiskMarkers markers = new AgentRiskMarkers(
+                Boolean.TRUE.equals(opensOutboundConnection),
+                Boolean.TRUE.equals(accessesSecret),
+                Boolean.TRUE.equals(privilegeEscalation));
         return new RawShellSignal(
                 actor,
                 commandText == null ? "" : commandText,
                 cwd,
                 envContext,
                 ts,
-                inputOrigin);
+                inputOrigin,
+                markers);
     }
 }

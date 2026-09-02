@@ -8,6 +8,6 @@ import org.springframework.context.annotation.Configuration;
  * {@link GeminiLlmService}.
  */
 @Configuration
-@EnableConfigurationProperties(LlmProperties.class)
+@EnableConfigurationProperties({LlmProperties.class, OllamaProperties.class})
 public class LlmConfig {
 }

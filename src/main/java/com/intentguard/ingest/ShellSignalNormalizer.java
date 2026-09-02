@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import com.intentguard.domain.AgentRiskMarkers;
 import com.intentguard.domain.CommandEvent;
 import com.intentguard.domain.InputOrigin;
 import com.intentguard.domain.IntentSource;
@@ -95,6 +94,6 @@ public class ShellSignalNormalizer {
                 inputOrigin,
                 SignalSource.HOOK,
                 IntentSource.NONE, // intent source resolved later by intent association
-                AgentRiskMarkers.none());
+                signal.agentRiskMarkers());
     }
 }

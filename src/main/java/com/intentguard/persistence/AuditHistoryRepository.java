@@ -61,4 +61,19 @@ public class AuditHistoryRepository {
         collection.find().sort(Sorts.ascending("timestamp")).into(results);
         return results;
     }
+
+    /**
+     * Returns the audit records across <em>all</em> users whose timestamp is at or after
+     * {@code sinceMs}, ordered oldest-first. Used to hydrate the Control_Tower dashboard on a fresh
+     * page load so historical decisions/alerts from the last N days are shown without waiting for
+     * new live events.
+     */
+    public List<AuditHistoryDocument> findSince(long sinceMs, int limit) {
+        List<AuditHistoryDocument> results = new ArrayList<>();
+        collection.find(gte("timestamp", sinceMs))
+                .sort(Sorts.ascending("timestamp"))
+                .limit(limit)
+                .into(results);
+        return results;
+    }
 }

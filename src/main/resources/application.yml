@@ -20,26 +20,41 @@ intentguard:
     connection-string: mongodb://localhost:27017
     database: intentguard
 
-  # Google Gemini LLM_Service via the native Google Gemini Java SDK (com.google.genai).
-  # Supply the key via environment variable: export GEMINI_API_KEY="your-key"
-  # The Java SDK uses short model names WITHOUT the "models/" prefix.
+  # ---- LLM Provider Selection -------------------------------------------------------
+  # Set to "ollama" to use the Ollama/BT-server backend, or "gemini" for Google Gemini SDK.
+  # When "ollama" is set, the intentguard.ollama.* config below is used for scoring,
+  # explanations, translation, and NL command generation.
   llm:
+    provider: ollama
     api-key: ${GEMINI_API_KEY:}
     model: gemini-2.5-flash
     timeout-ms: 1200
 
-  # Indian-language text translation via Gemini Generate API. The API key resolves from
-  # TRANSLATION_API_KEY if set, otherwise falls back to GEMINI_API_KEY; blank disables
-  # text translation at startup (content stays English).
+  # ---- Ollama / BT SRE LLM Server ---------------------------------------------------
+  # Ollama-compatible REST API. Used when intentguard.llm.provider=ollama.
+  # Supports local Ollama (http://localhost:11434) or BT SRE LLM service.
+  ollama:
+    base-url: https://asksredigital.bt.com/sre-llm-service-dev
+    model: Qwen2.5:14B
+    translation-model: Qwen2.5:14B
+    api-key: ${OLLAMA_API_KEY:}
+    # timeout-ms: non-blocking paths (translation, NL command generation). Generous.
+    timeout-ms: 60000
+    # scoring-timeout-ms: synchronous shell-hook scoring path. Kept tight so a slow/loaded
+    # LLM server causes the Semantic_Inconsistency component to be EXCLUDED and the 3
+    # deterministic components still score & block — the graceful-degradation guarantee.
+    # When the server is fast (0.5-6s), the full semantic score is captured within this budget.
+    scoring-timeout-ms: 8000
+
+  # Indian-language text translation.
+  # Set provider to "ollama" when using Ollama backend, or "gemini" for Gemini SDK.
   translation:
-    provider: gemini
+    provider: ollama
     api-key: ${TRANSLATION_API_KEY:${GEMINI_API_KEY:}}
-    timeout-ms: 2000
+    timeout-ms: 180000
     sensitive-content-translatable: false
 
-  # Speech-to-text / text-to-speech via Gemini multimodal API. The API key resolves from
-  # SPEECH_API_KEY if set, otherwise falls back to GEMINI_API_KEY; blank disables the
-  # speech capability at startup.
+  # Speech-to-text / text-to-speech via Gemini multimodal API.
   speech:
     provider: gemini
     api-key: ${SPEECH_API_KEY:${GEMINI_API_KEY:}}
@@ -48,13 +63,15 @@ intentguard:
 
   # Decision budget and timing bounds (see Threshold_Configuration in the design).
   decision:
-    budget-ms: 2000
+    # Covers up to two scoring-path LLM calls (semantic + explanation) at scoring-timeout-ms each,
+    # plus overhead, so a slow LLM degrades gracefully instead of hanging the shell.
+    budget-ms: 20000
     monitoring-gap-timeout-ms: 5000
     confirmation-timeout-ms: 15000
     correlation-window-ms: 1000
     learning-min-events: 200
 
-  # NL Operations Assistant — natural-language to scored shell commands. Generates 2–3
+  # NL Operations Assistant — natural-language to scored shell commands. Generates 2-3
   # safe alternatives per query, scores them through the full safety pipeline, and executes
   # only after explicit operator confirmation. Sessions auto-close after idle timeout.
   assist:

@@ -497,6 +497,30 @@
     });
   }
 
+  /**
+   * GET /api/bootstrap?days=N — hydrates state from persisted MongoDB data (last N days) so the
+   * dashboard reflects historical sessions/scores/alerts on a fresh page load instead of starting
+   * empty. Replays the returned events through the same state-transition functions the live
+   * channel uses, preserving ordering (oldest-first) so timelines and pending-asks rebuild
+   * correctly.
+   */
+  function loadBootstrap(state, opts) {
+    opts = opts || {};
+    var fetchFn = opts.fetch || (typeof fetch !== "undefined" ? fetch : null);
+    if (!fetchFn) return Promise.reject(new Error("fetch unavailable"));
+    var days = opts.days || 3;
+    return fetchFn("/api/bootstrap?days=" + encodeURIComponent(days)).then(function (res) {
+      if (!res.ok) throw new Error("bootstrap failed: " + res.status);
+      return res.json();
+    }).then(function (data) {
+      if (!data) return state;
+      (data.sessions || []).forEach(function (s) { applySessionEvent(state, s); });
+      (data.scores || []).forEach(function (s) { applyScoreEvent(state, s); });
+      (data.alerts || []).forEach(function (a) { applyAlertEvent(state, a); });
+      return state;
+    });
+  }
+
   /** GET /api/history?userId=&from=&to= (Req 11.3). */
   function loadHistory(userId, from, to, opts) {
     opts = opts || {};
@@ -519,7 +543,7 @@
     var dot = doc.getElementById("conn-dot");
     var label = doc.getElementById("conn-label");
     if (dot) dot.className = "dot " + (connected ? "dot-on" : "dot-off");
-    if (label) label.textContent = connected ? "live" : "disconnected";
+    if (label) label.textContent = connected ? "live" : "reconnecting…";
   }
 
   /** Opens the SSE channel and wires named events to state updates (Req 12.6). */
@@ -543,8 +567,12 @@
     ["SESSION", "SCORE", "ALERT"].forEach(function (name) {
       source.addEventListener(name, onEnvelope);
     });
-    source.onopen = function () { setConnected(true, doc); };
-    source.onerror = function () { setConnected(false, doc); };
+    var everOpened = false;
+    source.onopen = function () { everOpened = true; setConnected(true, doc); };
+    // Only flip to disconnected after we have been connected at least once — this suppresses
+    // the transient error the browser fires while the initial SSE handshake is negotiating,
+    // which would otherwise overwrite the optimistic "live" label in the HTML.
+    source.onerror = function () { if (everOpened) setConnected(false, doc); };
     return source;
   }
 
@@ -592,8 +620,17 @@
     opts = opts || {};
     var state = opts.state || createState();
     var doc = opts.document || document;
+    // Initial paint (empty), then hydrate from persisted MongoDB state (last 3 days) so the
+    // dashboard is populated on a fresh page load, then re-render and open the live channel.
     renderAll(state, doc);
     wireForms(state, doc);
+    if (opts.hydrate !== false) {
+      loadBootstrap(state, opts).then(function () {
+        renderAll(state, doc);
+      }).catch(function () {
+        // Bootstrap is best-effort: an empty/failed hydration still leaves a working live view.
+      });
+    }
     connectStream(state, opts);
     return state;
   }
@@ -623,6 +660,7 @@
     updateThresholds: updateThresholds,
     readThresholdForm: readThresholdForm,
     loadHistory: loadHistory,
+    loadBootstrap: loadBootstrap,
     connectStream: connectStream,
     wireForms: wireForms,
     setConnected: setConnected,

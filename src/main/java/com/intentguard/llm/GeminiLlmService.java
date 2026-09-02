@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import com.google.genai.Client;
@@ -37,6 +38,7 @@ import jakarta.annotation.PreDestroy;
  * cancelled and an empty result is returned (Req 6.3).
  */
 @Service
+@ConditionalOnProperty(name = "intentguard.llm.provider", havingValue = "gemini", matchIfMissing = true)
 public class GeminiLlmService implements LlmService {
 
     private static final Logger log = System.getLogger(GeminiLlmService.class.getName());

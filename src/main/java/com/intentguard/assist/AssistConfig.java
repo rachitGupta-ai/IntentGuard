@@ -5,20 +5,20 @@ import java.lang.System.Logger.Level;
 import java.time.Clock;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.google.genai.Client;
 import com.intentguard.llm.LlmProperties;
+import com.intentguard.llm.OllamaClient;
+import com.intentguard.llm.OllamaProperties;
 
 /**
  * Configuration for the NL Operations Assistant package. Enables {@link AssistProperties} binding
- * and provides the {@link AssistTextGenerator} bean backed by the Google Gemini SDK.
- *
- * <p>The bean reuses the API key and model from {@link LlmProperties} (the existing
- * {@code intentguard.llm.*} namespace). When no API key is configured, the generator throws on
- * every call so that callers wrap the failure as {@link AssistGenerationException}.
+ * and provides the {@link AssistTextGenerator} bean backed by either Google Gemini or Ollama,
+ * depending on the {@code intentguard.llm.provider} property.
  */
 @Configuration
 @EnableConfigurationProperties(AssistProperties.class)
@@ -40,7 +40,8 @@ public class AssistConfig {
      * Gemini {@code Client} and delegates to {@code models.generateContent}.
      */
     @Bean
-    AssistTextGenerator assistTextGenerator(LlmProperties llmProperties) {
+    @ConditionalOnProperty(name = "intentguard.llm.provider", havingValue = "gemini", matchIfMissing = true)
+    AssistTextGenerator geminiAssistTextGenerator(LlmProperties llmProperties) {
         return prompt -> {
             if (!llmProperties.hasApiKey()) {
                 throw new IllegalStateException("No Gemini API key configured; command generation unavailable");
@@ -56,5 +57,20 @@ public class AssistConfig {
                 }
             }
         };
+    }
+
+    /**
+     * Provides an Ollama-backed text generator for command generation. Calls the Ollama REST API
+     * via the shared {@link OllamaClient}.
+     */
+    @Bean
+    @ConditionalOnProperty(name = "intentguard.llm.provider", havingValue = "ollama")
+    AssistTextGenerator ollamaAssistTextGenerator(OllamaProperties ollamaProperties) {
+        OllamaClient client = new OllamaClient(ollamaProperties.getBaseUrl(),
+                ollamaProperties.getApiKey(), ollamaProperties.getTimeoutMs());
+        return prompt -> client.generate(ollamaProperties.getModel(), prompt,
+                ollamaProperties.getTimeoutMs(), 0.3, 300)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Ollama command generation returned empty"));
     }
 }

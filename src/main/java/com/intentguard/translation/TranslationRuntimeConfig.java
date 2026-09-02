@@ -96,7 +96,12 @@ public class TranslationRuntimeConfig {
      */
     @PostConstruct
     public void initialize() {
-        this.textTranslationEnabled = translationProperties.hasApiKey();
+        // Text translation is enabled when a Translation_Provider credential is present, OR when the
+        // active provider is the Ollama backend (which authenticates via intentguard.ollama.* and
+        // needs no Gemini-style translation key). The Ollama provider degrades gracefully to an
+        // English fallback if its endpoint is unreachable, so enabling the capability is safe.
+        boolean ollamaProvider = "ollama".equalsIgnoreCase(translationProperties.getProvider());
+        this.textTranslationEnabled = translationProperties.hasApiKey() || ollamaProvider;
         this.speechEnabled = speechProperties.hasApiKey();
         active.set(new Snapshot(
                 translationProperties.getProvider(),

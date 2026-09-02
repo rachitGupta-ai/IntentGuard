@@ -24,11 +24,27 @@ public record RawShellSignal(
         String cwd,
         Map<String, String> envContext,
         long timestamp,
-        InputOrigin inputOrigin) {
+        InputOrigin inputOrigin,
+        AgentRiskMarkers agentRiskMarkers) {
 
     public RawShellSignal {
         Objects.requireNonNull(actor, "actor must not be null");
         Objects.requireNonNull(commandText, "commandText must not be null");
         envContext = envContext == null ? Map.of() : Map.copyOf(envContext);
+        agentRiskMarkers = agentRiskMarkers == null ? AgentRiskMarkers.none() : agentRiskMarkers;
+    }
+
+    /**
+     * Backward-compatible constructor without agent risk markers (defaults to none). Retained so
+     * existing callers/tests that predate marker support keep compiling.
+     */
+    public RawShellSignal(
+            Actor actor,
+            String commandText,
+            String cwd,
+            Map<String, String> envContext,
+            long timestamp,
+            InputOrigin inputOrigin) {
+        this(actor, commandText, cwd, envContext, timestamp, inputOrigin, AgentRiskMarkers.none());
     }
 }
