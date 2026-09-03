@@ -1,5 +1,7 @@
 package com.intentguard.persistence;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
@@ -27,6 +29,18 @@ public class BehavioralProfileRepository {
 
     public BehavioralProfileRepository(MongoDatabase database) {
         this.collection = database.getCollection(COLLECTION, BehavioralProfileDocument.class);
+    }
+
+    /**
+     * Returns the distinct non-null {@code userId} values across all profiles. Used to build the
+     * Known_User list (Req 1.1, 9.3). Never returns {@code null} — returns an empty list when the
+     * collection is empty.
+     */
+    public List<String> distinctUserIds() {
+        List<String> results = new ArrayList<>();
+        collection.distinct("userId", String.class).into(results);
+        results.removeIf(id -> id == null);
+        return results;
     }
 
     /**

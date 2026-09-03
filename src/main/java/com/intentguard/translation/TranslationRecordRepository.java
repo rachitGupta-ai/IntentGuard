@@ -7,7 +7,10 @@ import org.springframework.stereotype.Repository;
 
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Filters.gte;
+import static com.mongodb.client.model.Filters.lte;
 import com.mongodb.client.model.Sorts;
 
 /**
@@ -61,6 +64,26 @@ public class TranslationRecordRepository {
     public List<TranslationRecord> findByKind(TranslationRecordKind kind) {
         List<TranslationRecordDocument> documents = new ArrayList<>();
         collection.find(eq("kind", kind == null ? null : kind.name()))
+                .sort(Sorts.ascending("timestamp"))
+                .into(documents);
+        return toDomainList(documents);
+    }
+
+    /**
+     * Returns all Translation_Records whose {@code timestamp} falls within {@code [from, to]}
+     * inclusive, ordered oldest-first (Req 5.1, 9.3).
+     *
+     * <p>Translation_Records carry no {@code userId}, so they contribute nothing to the Known_User
+     * list and attribution to a specific user is left to the caller. This method performs a
+     * read-only range scan and never writes to the collection (Req 9.3).
+     *
+     * @param from lower bound (inclusive), epoch-milliseconds
+     * @param to   upper bound (inclusive), epoch-milliseconds
+     * @return matching records ordered oldest-first; never {@code null}
+     */
+    public List<TranslationRecord> findByTimeRange(long from, long to) {
+        List<TranslationRecordDocument> documents = new ArrayList<>();
+        collection.find(and(gte("timestamp", from), lte("timestamp", to)))
                 .sort(Sorts.ascending("timestamp"))
                 .into(documents);
         return toDomainList(documents);

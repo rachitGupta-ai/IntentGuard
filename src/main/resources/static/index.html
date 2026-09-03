@@ -15,6 +15,10 @@
         <p class="tagline">Semantic firewall for the Linux command layer</p>
       </div>
     </div>
+    <nav class="nav-tabs" aria-label="Dashboard views">
+      <button id="nav-live" class="nav-tab active" aria-pressed="true">Live</button>
+      <button id="nav-profiling" class="nav-tab" aria-pressed="false">User Profiling</button>
+    </nav>
     <div class="conn">
       <!-- Start optimistically as "live" — turns red only if SSE actually errors -->
       <span id="conn-dot" class="dot dot-on" aria-hidden="true"></span>
@@ -22,7 +26,8 @@
     </div>
   </header>
 
-  <main class="grid">
+  <!-- Live dashboard view (existing) -->
+  <main id="live-view" class="grid">
     <!-- Active Intent_Sessions (Req 12.1) -->
     <section class="panel" id="panel-sessions">
       <h2>Active Intent Sessions</h2>
@@ -170,6 +175,132 @@
         <ul id="history-list" class="history-list"></ul>
       </div>
     </section>
+  </main>
+
+  <!-- User Profiling view (hidden by default, Req 11.1). Uses the same responsive card grid
+       as the live dashboard so the two tabs share one visual language. -->
+  <main id="profiling-view" class="grid view-hidden">
+
+    <!-- User selector + window controls (Req 1.4, 1.5, 1.6, 7.6). Spans the full grid width and
+         auto-sizes to its content so it reads as a control bar above the category cards. -->
+    <section class="panel panel-controls" id="panel-user-selector">
+      <h2>User Profiling</h2>
+      <p class="hint">Select a user and time window to reconstruct their read-only activity profile.</p>
+      <div class="panel-body panel-body-controls">
+
+        <!-- All controls on a single aligned row (Req 1.4, 1.5, 7.1, 7.2). -->
+        <div class="profiling-controls">
+          <!-- Known_Users searchable selector (Req 1.4, 1.5): a text input backed by a native
+               <datalist> so the operator can type to filter the known-user list. Falls back to a
+               plain dropdown affordance via the same list. -->
+          <div class="field field-user">
+            <label for="profiling-user-select">Search user</label>
+            <input
+              type="text"
+              id="profiling-user-select"
+              class="user-search"
+              list="profiling-user-options"
+              placeholder="Type or pick a user…"
+              autocomplete="off"
+              aria-label="Search and select a known user to profile" />
+            <datalist id="profiling-user-options"></datalist>
+          </div>
+
+          <!-- Window selector: days input (Req 7.1, 7.2) -->
+          <div class="field field-days">
+            <label for="profiling-days">Window (days)</label>
+            <input
+              type="number"
+              id="profiling-days"
+              min="1"
+              max="365"
+              value="3"
+              aria-describedby="profiling-days-hint" />
+          </div>
+
+          <!-- Full-history toggle (Req 7.4) -->
+          <div class="field field-full">
+            <label class="checkbox-label">
+              <input type="checkbox" id="profiling-full" />
+              Full history
+            </label>
+          </div>
+
+          <!-- Load action -->
+          <div class="field field-action">
+            <button id="profiling-load-btn" class="btn btn-primary" disabled>Load profile</button>
+          </div>
+
+          <!-- Live status (n users found / loading / error) sits at the end of the row -->
+          <span id="profiling-users-status" class="profiling-status-hint" aria-live="polite"></span>
+          <span id="profiling-days-hint" class="field-hint sr-note">1–365 days</span>
+        </div>
+
+        <!-- Active_Window bounds display (Req 7.6) -->
+        <div id="profiling-window-bounds" class="profiling-window-bounds view-hidden" aria-live="polite">
+          <span class="window-label">Window:</span>
+          <span id="profiling-window-start" class="window-value"></span>
+          <span class="window-sep">→</span>
+          <span id="profiling-window-end" class="window-value"></span>
+        </div>
+
+        <!-- No-user-selected prompt (Req 1.5) -->
+        <p id="profiling-no-user-msg" class="profiling-hint">
+          Search for a user above to view their profile.
+        </p>
+
+      </div>
+    </section>
+
+    <!-- Risk Overview: average command score + 30-day trend graph. Spans the full grid width. -->
+    <section class="panel panel-risk" id="panel-prof-risk">
+      <h2>Risk Overview</h2>
+      <p class="hint">Average command score and 30-day risk trend, from this user's command history.</p>
+      <div class="panel-body panel-body-risk" id="prof-risk-body">
+        <p class="empty">No user selected.</p>
+      </div>
+    </section>
+
+    <!-- Command Decision Timeline (Req 2, R8) -->
+    <section class="panel" id="panel-prof-timeline">
+      <h2>Command Decision Timeline</h2>
+      <div class="panel-body" id="prof-timeline-body">
+        <p class="empty">No user selected.</p>
+      </div>
+    </section>
+
+    <!-- Multilingual Commands & Intents (Req 3, R8) -->
+    <section class="panel" id="panel-prof-multilingual">
+      <h2>Multilingual Commands &amp; Intents</h2>
+      <div class="panel-body" id="prof-multilingual-body">
+        <p class="empty">No user selected.</p>
+      </div>
+    </section>
+
+    <!-- NL Assistant Queries (Req 4, R8) -->
+    <section class="panel" id="panel-prof-assist">
+      <h2>NL Assistant Queries</h2>
+      <div class="panel-body" id="prof-assist-body">
+        <p class="empty">No user selected.</p>
+      </div>
+    </section>
+
+    <!-- Translation Records (Req 5, R8) -->
+    <section class="panel" id="panel-prof-translations">
+      <h2>Translation Records</h2>
+      <div class="panel-body" id="prof-translations-body">
+        <p class="empty">No user selected.</p>
+      </div>
+    </section>
+
+    <!-- Behavioral Profile Summary (Req 6) -->
+    <section class="panel" id="panel-prof-behavioral">
+      <h2>Behavioral Profile</h2>
+      <div class="panel-body" id="prof-behavioral-body">
+        <p class="empty">No user selected.</p>
+      </div>
+    </section>
+
   </main>
 
   <script src="app.js"></script>

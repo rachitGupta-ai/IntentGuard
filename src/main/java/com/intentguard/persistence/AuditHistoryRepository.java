@@ -13,6 +13,8 @@ import static com.mongodb.client.model.Filters.and;
 import static com.mongodb.client.model.Filters.eq;
 import static com.mongodb.client.model.Filters.gte;
 import static com.mongodb.client.model.Filters.lte;
+import static com.mongodb.client.model.Filters.ne;
+import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Sorts;
 
 /**
@@ -75,5 +77,39 @@ public class AuditHistoryRepository {
                 .limit(limit)
                 .into(results);
         return results;
+    }
+
+    /**
+     * Returns all distinct non-null {@code userId} values across the {@code audit_history}
+     * collection. Used to build the Known_User list for the User_Profiling_Screen (Req 1.1, 9.3).
+     *
+     * <p>This is a pure read; it performs no write operations.
+     *
+     * @return a non-null, possibly empty list of distinct user ids
+     */
+    public List<String> distinctUserIds() {
+        List<String> ids = new ArrayList<>();
+        collection.distinct("userId", ne("userId", null), String.class).into(ids);
+        return ids;
+    }
+
+    /**
+     * Returns the {@code timestamp} of the earliest audit record for the given {@code userId}, or
+     * {@link Optional#empty()} when the user has no records. Used to compute the lower bound of
+     * the full-history Active_Window (Req 7.4, 9.3).
+     *
+     * <p>This is a pure read; it performs no write operations.
+     *
+     * @param userId the user whose earliest record timestamp is sought
+     * @return the minimum timestamp in epoch milliseconds, or empty when the user has no records
+     */
+    public Optional<Long> earliestTimestampForUser(String userId) {
+        AuditHistoryDocument oldest = collection
+                .find(eq("userId", userId))
+                .sort(Sorts.ascending("timestamp"))
+                .projection(Projections.include("timestamp"))
+                .limit(1)
+                .first();
+        return oldest == null ? Optional.empty() : Optional.of(oldest.getTimestamp());
     }
 }

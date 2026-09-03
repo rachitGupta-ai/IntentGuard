@@ -137,12 +137,17 @@ public class AssistController {
     }
 
     /**
-     * Maps LLM generation failures to HTTP 502 (upstream dependency failure).
+     * Maps LLM generation failures to HTTP 502 (upstream dependency failure). The internal cause
+     * (e.g. an empty/timed-out LLM response) is preserved as {@code detail} for logs/debugging,
+     * while {@code error} carries a clean, operator-facing message so a cold or unavailable LLM
+     * degrades to a clear "try again" rather than leaking a provider-internal string.
      */
     @ExceptionHandler(AssistGenerationException.class)
     public ResponseEntity<Map<String, String>> onGenerationFailure(AssistGenerationException ex) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(Map.of("error", ex.getMessage()));
+                .body(Map.of(
+                        "error", "The assistant is temporarily unavailable (the language model did not respond). Please try again in a moment.",
+                        "detail", ex.getMessage() == null ? "" : ex.getMessage()));
     }
 
     /**

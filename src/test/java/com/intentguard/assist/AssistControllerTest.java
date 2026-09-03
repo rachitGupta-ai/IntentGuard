@@ -218,7 +218,10 @@ class AssistControllerTest {
                                 {"query": "restart nginx"}
                                 """))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error").value("LLM service timed out"));
+                // The user-facing error is a clean, generic "temporarily unavailable" message;
+                // the raw provider detail is preserved separately under "detail".
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("temporarily unavailable")))
+                .andExpect(jsonPath("$.detail").value("LLM service timed out"));
     }
 
     @Test

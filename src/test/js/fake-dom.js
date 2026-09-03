@@ -38,6 +38,30 @@ class FakeElement {
     this._text = "";
   }
 
+  // Reflect disabled as an attribute so tests can check attributes.disabled === "true".
+  get disabled() { return this.attributes.disabled === "true"; }
+  set disabled(v) {
+    if (v) {
+      this.attributes.disabled = "true";
+    } else {
+      delete this.attributes.disabled;
+    }
+  }
+
+  // Reflect selected as an attribute.
+  get selected() { return this.attributes.selected === "true"; }
+  set selected(v) {
+    if (v) {
+      this.attributes.selected = "true";
+    } else {
+      delete this.attributes.selected;
+    }
+  }
+
+  // Reflect value as an attribute so tests can check attributes.value.
+  get value() { return this.attributes.value !== undefined ? this.attributes.value : ""; }
+  set value(v) { this.attributes.value = v == null ? "" : String(v); }
+
   appendChild(node) {
     node.parentNode = this;
     this.children.push(node);

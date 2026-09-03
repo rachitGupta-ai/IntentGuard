@@ -184,3 +184,277 @@ ul { list-style: none; margin: 0; padding: 0; }
 
 .alerts-list li.high-risk { border-color: var(--block); }
 .ts { font-size: 11px; color: var(--muted); }
+
+/* ── User Profiling Screen (additive only — Req 11.1, 10.5, 8.4) ─────────────── */
+
+/* Hide a view when switching tabs (Req 11.1, 11.2) */
+.view-hidden { display: none; }
+
+/* Top navigation tabs (Req 11.1) */
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-tab {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.nav-tab:hover { color: var(--text); }
+
+.nav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Per-category panel states (Req 10.5, 8.4) */
+
+/* Error state — category fetch failed or timed out (Req 10.5) */
+.cat-error {
+  color: var(--block);
+  background: rgba(239, 91, 107, 0.08);
+  border: 1px solid rgba(239, 91, 107, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+/* Empty state — category returned successfully but has no records */
+.cat-empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+/* Truncation indicator — shown when a category result was capped at Record_Cap (Req 8.4) */
+.cat-truncated {
+  color: var(--ask);
+  background: rgba(242, 178, 74, 0.08);
+  border: 1px solid rgba(242, 178, 74, 0.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* ── User Profiling layout & components (additive; matches the Live view design) ──────────── */
+
+/* The controls panel spans the full grid width and hugs its content height (it is not a
+   fixed-height scroll card like the category panels), so it reads as a control bar. */
+.panel-controls {
+  grid-column: 1 / -1;
+  height: auto;
+}
+.panel-body-controls {
+  flex: none;
+  overflow: visible;
+}
+
+/* Controls laid out as ONE aligned horizontal row (Req 1.4). Fields carry a label above a
+   fixed-height control; align-items:end keeps every control on the same baseline so the whole
+   thing reads as a single search/action bar. */
+.profiling-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px 16px;
+}
+.profiling-controls .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+.profiling-controls .field label { font-size: 12px; color: var(--muted); }
+
+/* Uniform control height so the row is visually level. */
+.profiling-controls select,
+.profiling-controls input[type="text"],
+.profiling-controls input[type="number"] {
+  height: 38px;
+  box-sizing: border-box;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 13px;
+}
+.profiling-controls select:focus,
+.profiling-controls input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.25);
+}
+
+/* The searchable user box takes the slack; the day input stays compact. */
+.field-user { flex: 1 1 320px; min-width: 260px; }
+.field-user .user-search { width: 100%; }
+.field-days #profiling-days { width: 110px; }
+
+/* Full-history checkbox + Load button align to the bottom of the row. */
+.field-full { align-self: end; }
+.field-full .checkbox-label { height: 38px; }
+.field-action { align-self: end; }
+.field-action .btn { height: 38px; padding: 0 18px; }
+
+.field-hint { font-size: 11px; color: var(--muted); }
+/* The days hint is available to screen readers / wraps to the next line; not a row column. */
+.sr-note { flex-basis: 100%; order: 99; }
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Status hint sits at the end of the row, vertically centered. */
+.profiling-status-hint {
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+.profiling-status-hint.status-ok { color: var(--allow); }
+.profiling-status-hint.cat-error {
+  color: var(--block);
+  background: none;
+  border: none;
+  padding: 0;
+}
+.profiling-status-hint.cat-empty { color: var(--muted); background: none; border: none; padding: 0; }
+
+/* Active_Window bounds shown as a subtle pill on the controls bar. */
+.profiling-window-bounds {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 6px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+}
+.profiling-window-bounds .window-label { color: var(--muted); }
+.profiling-window-bounds .window-value { font-variant-numeric: tabular-nums; }
+.profiling-window-bounds .window-sep { color: var(--muted); }
+
+.profiling-hint { margin: 12px 0 0; font-size: 13px; color: var(--muted); }
+
+/* Per-record list inside a category panel — mirrors the .*-list li cards of the live view. */
+.prof-list { list-style: none; margin: 0; padding: 0; }
+.prof-entry {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--panel-2);
+}
+.prof-entry-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.prof-meta-sep { color: var(--border); }
+.prof-cmd { word-break: break-all; }
+.prof-reason,
+.prof-state,
+.prof-origin { color: var(--muted); }
+
+/* Multilingual entry: source text + language tag + adjacent English text. */
+.prof-lang-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.prof-src-text { font-weight: 600; }
+.prof-eng-text { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.prof-translation-unavailable { font-size: 12px; color: var(--ask); margin-top: 4px; }
+
+/* Assistant queries: query text + generated command list. */
+.prof-query-text { font-weight: 600; }
+.prof-cmd-list { margin: 6px 0 0; padding-left: 20px; }
+.prof-cmd-list li { margin: 2px 0; }
+
+/* Translation records: degraded (fallback) entries flagged with an amber left border. */
+.prof-entry-degraded { border-left: 3px solid var(--ask); }
+
+/* Behavioral profile: section labels + top-k count lists. */
+.prof-section-label { margin: 12px 0 6px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.prof-topk-list .prof-topk-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+.prof-count { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* Whole-profile failure banner — visually distinct from a quiet empty state (Req 10.6). */
+.prof-whole-failure { font-weight: 500; }
+
+/* ── Risk Overview panel: average-score badge + 30-day trend graph ───────────────────────── */
+
+/* The risk panel spans the full grid width and auto-heights (chart + summary, no inner scroll). */
+.panel-risk { grid-column: 1 / -1; height: auto; }
+.panel-body-risk { flex: none; overflow: visible; }
+
+/* Summary row: big average-score badge next to band + action counts. */
+.risk-summary {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+/* The average-score badge — colour-coded by risk band. */
+.risk-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.risk-badge-value { font-size: 28px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.risk-badge-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+.risk-low      { border-color: var(--allow); color: var(--allow); }
+.risk-elevated { border-color: var(--ask);   color: var(--ask); }
+.risk-high     { border-color: var(--block); color: var(--block); }
+.risk-none     { color: var(--muted); }
+
+.risk-meta { display: flex; flex-direction: column; gap: 6px; }
+.risk-band-line { font-size: 14px; font-weight: 600; }
+.risk-count-line { font-size: 12px; color: var(--muted); }
+.risk-action-counts { display: flex; gap: 8px; margin-top: 2px; }
+
+/* Trend graph. */
+.risk-chart-wrap { width: 100%; }
+.risk-chart {
+  width: 100%;
+  height: 160px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.risk-chart-caption { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
