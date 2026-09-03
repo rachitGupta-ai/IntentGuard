@@ -51,7 +51,7 @@
 .reveal h3 { font-size: 1.1em; color: var(--accent); margin-bottom: 0.3em; }
 
 .reveal p, .reveal li {
-  color: var(--text-secondary);
+  color: #ffffff;
   line-height: 1.6;
   font-size: 0.9em;
 }
@@ -719,19 +719,24 @@ Composite:     0.92</code></pre>
       <span style="color:var(--yellow);">ASK</span><br>
       <span style="color:var(--red);">BLOCK</span>
     </div>
-    <!-- Gemini LLM -->
-    <div class="arch-box support-box" style="left:490px;top:230px;width:180px;">
-      <strong>Gemini LLM</strong><br><span style="font-size:0.85em;color:var(--text-secondary);">Local / Free-tier<br>1200ms timeout</span>
+    <!-- LLM backend (pluggable) -->
+    <div class="arch-box support-box" style="left:470px;top:230px;width:210px;">
+      <strong>LLM (pluggable)</strong><br><span style="font-size:0.82em;color:var(--text-secondary);">Ollama · Qwen2.5:14B <em>(default,<br>on-prem)</em> ⇄ Gemini · scoring 8s</span>
     </div>
     <!-- MongoDB -->
-    <div class="arch-box support-box" style="left:780px;top:230px;width:180px;">
-      <strong>MongoDB</strong><br><span style="font-size:0.85em;color:var(--text-secondary);">Profiles, Sessions,<br>Audit, Config</span>
+    <div class="arch-box support-box" style="left:790px;top:225px;width:200px;">
+      <strong>MongoDB</strong><br><span style="font-size:0.82em;color:var(--text-secondary);">audit · sessions · profiles<br>assist · translations · config</span>
     </div>
     <!-- Audit Feed -->
-    <div class="arch-box support-box" style="left:490px;top:360px;width:340px;">
+    <div class="arch-box support-box" style="left:470px;top:355px;width:250px;">
       <strong>Audit_Feed</strong> (auditd) — async detection / corroboration
     </div>
+    <!-- Read-only User Profiling / analytics (reads MongoDB, never enforces) -->
+    <div class="arch-box support-box" style="left:790px;top:340px;width:270px;border-color:var(--accent);">
+      <strong style="color:var(--accent);">User Profile API</strong> — read-only<br><span style="font-size:0.82em;color:var(--text-secondary);">6 activity blocks + 30-day risk trend<br>GET-only · never touches enforcement</span>
+    </div>
   </div>
+  <p style="font-size:0.68em;color:var(--text-secondary);margin-top:6px;">Solid = enforcement (write) path · the dashed <span class="accent">User Profile API</span> is a strictly read-only analytics path over the same store.</p>
 </section>
 
 <!-- SLIDE 8: Scoring Pipeline (ANIMATED) -->
@@ -750,7 +755,7 @@ Composite:     0.92</code></pre>
       <div class="score-comp">
         <strong>Semantic<br>Inconsistency</strong>
         <div class="weight">w = 0.30</div>
-        <div style="font-size:0.8em;color:var(--orange);">LLM (Gemini)</div>
+        <div style="font-size:0.8em;color:var(--orange);">LLM (Ollama/Qwen)</div>
       </div>
       <div class="score-comp">
         <strong>Behavioral<br>Deviation</strong>
@@ -770,7 +775,7 @@ Composite:     0.92</code></pre>
     <div class="fragment" style="color:var(--purple);font-size:0.9em;">▼</div>
     <div class="fragment clamp-box">
       <strong style="color:var(--purple);">clamp [0.0, 1.0]</strong> → Final Divergence_Score<br>
-      <span style="font-size:0.8em;color:var(--text-secondary);">Convex combination guaranteed in [0,1]. Deterministic execution order (sorted by ComponentId).</span>
+      <span style="font-size:0.8em;color:var(--text-secondary);">Convex combination guaranteed in [0,1]. Deterministic (sorted by ComponentId). <span class="accent">LLM slow/down → Semantic EXCLUDED, weights renormalize, 3 deterministic components still block.</span></span>
     </div>
   </div>
 </section>
@@ -925,6 +930,8 @@ Composite:     0.92</code></pre>
       <tr><td><strong>Behavioral Learning</strong></td><td style="color:#4caf50;">✅</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--yellow);">Partial</td><td style="color:var(--red);">❌</td></tr>
       <tr><td><strong>Explainability</strong></td><td style="color:#4caf50;">✅ (11 langs)</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--yellow);">Partial</td><td style="color:var(--yellow);">Partial</td><td style="color:var(--red);">❌</td></tr>
       <tr><td><strong>Agent-Aware</strong></td><td style="color:#4caf50;">✅</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td></tr>
+      <tr><td><strong>Per-User Risk Profiling</strong></td><td style="color:#4caf50;">✅ (avg score + 30d trend)</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--red);">❌</td><td style="color:var(--yellow);">Partial</td><td style="color:var(--yellow);">Partial</td></tr>
+      <tr><td><strong>On-Prem Sovereign LLM</strong></td><td style="color:#4caf50;">✅</td><td style="color:var(--text-secondary);">n/a</td><td style="color:var(--text-secondary);">n/a</td><td style="color:var(--text-secondary);">n/a</td><td style="color:var(--red);">❌</td><td style="color:var(--text-secondary);">n/a</td></tr>
     </tbody>
   </table>
   <div style="margin-top:16px;padding:10px 14px;background:var(--bg-secondary);border-radius:6px;font-size:0.78em;">
@@ -938,13 +945,14 @@ Composite:     0.92</code></pre>
   <p style="font-size:0.8em;color:var(--text-secondary);margin-bottom:16px;">Free-tier Gemini + MongoDB Atlas M0 + open-source stack</p>
   <div class="tech-grid">
     <div class="tech-item"><span class="label">Runtime</span><span class="value">Java 17, Spring Boot 3.3.5</span></div>
-    <div class="tech-item"><span class="label">LLM</span><span class="value">Gemini 2.5-flash (free tier)</span></div>
+    <div class="tech-item"><span class="label">LLM</span><span class="value">Ollama · Qwen2.5:14B (on-prem) ⇄ Gemini</span></div>
     <div class="tech-item"><span class="label">Datastore</span><span class="value">MongoDB (Atlas M0 / local)</span></div>
     <div class="tech-item"><span class="label">Transport</span><span class="value">Unix Domain Socket (UDS)</span></div>
     <div class="tech-item"><span class="label">Testing</span><span class="value">jqwik PBT + JUnit 5</span></div>
     <div class="tech-item"><span class="label">Languages</span><span class="value">11 Indian (Gemini + Bhashini)</span></div>
     <div class="tech-item"><span class="label">Speech</span><span class="value">Gemini multimodal API (STT)</span></div>
-    <div class="tech-item"><span class="label">Infra Cost</span><span class="value">$0 (Gemini 1500 req/day free)</span></div>
+    <div class="tech-item"><span class="label">Analytics</span><span class="value">User Profiling · risk trend (read-only)</span></div>
+    <div class="tech-item"><span class="label">Infra Cost</span><span class="value">$0 (on-prem Ollama / free-tier Gemini)</span></div>
   </div>
 </section>
 
@@ -1009,9 +1017,9 @@ Composite:     0.92</code></pre>
   </div>
 </section>
 
-<!-- SLIDE 18: Future Vision -->
+<!-- SLIDE 18: Deployment Roadmap -->
 <section>
-  <h2>Future Vision</h2>
+  <h2>Deployment Roadmap</h2>
   <div class="future-cols">
     <div class="future-col">
       <h4>Near-term (6 months)</h4>
@@ -1032,6 +1040,163 @@ Composite:     0.92</code></pre>
   </div>
   <div style="margin-top:24px;padding:12px 16px;background:var(--bg-secondary);border-radius:6px;font-size:0.78em;">
     <strong style="color:var(--accent);">Extensibility:</strong> DecisionEngine's ordered-rule chain supports adding new guardrail layers without modifying existing ones (Open-Closed Principle).
+  </div>
+</section>
+
+<!-- NEW SLIDE: System Architecture — two flows over one store -->
+<section>
+  <h2>System Architecture — Two Flows, One Store</h2>
+  <p style="font-size:0.78em;color:var(--text-secondary);margin-bottom:8px;">A single Enforcement_Engine process. The write path enforces; a strictly read-only path serves analytics.</p>
+  <div class="columns-3" style="grid-template-columns:1fr 1fr;">
+    <div class="col-box">
+      <h4>① Enforcement (write) path</h4>
+      <ul style="font-size:0.8em;">
+        <li>Shell_Hook (UDS) blocks pre-exec until a verdict returns</li>
+        <li>Scoring Pipeline → Decision Engine → ALLOW / ASK / BLOCK</li>
+        <li>auditd feed corroborates async (1s window)</li>
+        <li>Persists audit + pushes SSE to the Live tab</li>
+      </ul>
+    </div>
+    <div class="col-box" style="border-top-color:var(--accent);">
+      <h4>② Read-only analytics path</h4>
+      <ul style="font-size:0.8em;">
+        <li><code>GET /api/users</code> · <code>/users/{id}/profile</code></li>
+        <li>Projects 5 persisted collections into 6 activity blocks</li>
+        <li>Bounded 5-thread assembly, independent 5s cutoff per block</li>
+        <li>GET-only · no scoring/decision/translation/execution</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:14px;padding:10px 14px;background:var(--bg-secondary);border-radius:6px;font-size:0.76em;">
+    <strong class="accent">Guarantee:</strong> a build-failing bean-wiring test proves the aggregation service can only be handed repositories — it can never reach the enforcement engine. Any non-GET verb → HTTP 405.
+  </div>
+</section>
+
+<!-- NEW SLIDE: Innovation & Novelty -->
+<section>
+  <h2>Innovation &amp; Novelty</h2>
+  <div class="fragment diff-item">
+    <span class="diff-num">01</span>
+    <div class="diff-text">
+      <h4>Intent-vs-Action Divergence Scoring</h4>
+      <p>A 4-component renormalized weighted sum (sequence · context · semantic · behavioral). No existing shell-security tool scores <em>alignment with declared intent</em> — they only check identity/permission.</p>
+    </div>
+  </div>
+  <div class="fragment diff-item">
+    <span class="diff-num">02</span>
+    <div class="diff-text">
+      <h4>Per-User Forensic Profiling + Risk Score <span class="accent">(new)</span></h4>
+      <p>One read-only view reconstructs a user's whole story: command timeline, native-language intents, assistant queries, translations, learned behavior — plus an <strong>average command score</strong> and a <strong>30-day risk-trend graph</strong>, computed purely from already-scored data.</p>
+    </div>
+  </div>
+  <div class="fragment diff-item">
+    <span class="diff-num">03</span>
+    <div class="diff-text">
+      <h4>Agent-Aware Containment</h4>
+      <p>The engine distinguishes AI agents from humans. An unattended agent never gets a silent ALLOW, and risk markers (outbound + secret-access + priv-esc) monotonically uplift the score.</p>
+    </div>
+  </div>
+  <div class="fragment diff-item">
+    <span class="diff-num">04</span>
+    <div class="diff-text">
+      <h4>Bharat-First, Native-Script Multilingual</h4>
+      <p>Intents and explanations render in the operator's own script (Devanagari, Tamil, Bengali…) beside English — technical tokens (paths, IPs, commands) preserved byte-for-byte across 11 languages.</p>
+    </div>
+  </div>
+</section>
+
+<!-- NEW SLIDE: Security & Safety -->
+<section>
+  <h2>Security &amp; Safety by Design</h2>
+  <div class="columns-3">
+    <div class="col-box" style="border-top-color:var(--red);">
+      <h4>Tamper-proof</h4>
+      <ul style="font-size:0.78em;">
+        <li>TamperClassifier → force score 1.0, BLOCK</li>
+        <li>SelfDefenseGuard rejects engine-internal ops</li>
+        <li>PrivilegeSeparationChecker at boot</li>
+      </ul>
+    </div>
+    <div class="col-box" style="border-top-color:var(--yellow);">
+      <h4>Fail-closed</h4>
+      <ul style="font-size:0.78em;">
+        <li>Dependency down → BLOCK (never ALLOW)</li>
+        <li>ASK timeout → BLOCK</li>
+        <li>Dual-control timeout → BLOCK</li>
+      </ul>
+    </div>
+    <div class="col-box">
+      <h4>Graceful degradation</h4>
+      <ul style="font-size:0.78em;">
+        <li>LLM slow/down → Semantic excluded, 3 deterministic components still block</li>
+        <li>Translation down → falls back to English (HTTP 200)</li>
+        <li>Assist down → clean 502, never a leak</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:14px;padding:10px 14px;background:rgba(0,212,170,0.06);border-left:4px solid var(--accent);border-radius:0 6px 6px 0;font-size:0.78em;">
+    <strong class="accent">Sovereign &amp; observational:</strong> on-prem Qwen2.5:14B — no command text, path, or telemetry leaves the network (<code>/api/sovereignty</code> proves it live). The profiling analytics layer is strictly read-only: GET-only, pure reads, 405 on any write, zero enforcement reach.
+  </div>
+</section>
+
+<!-- NEW SLIDE: Results, Impact & Scalability -->
+<section>
+  <h2>Results, Impact &amp; Scalability</h2>
+  <div class="columns-3">
+    <div class="col-box">
+      <h4>Proven</h4>
+      <ul style="font-size:0.8em;">
+        <li><strong class="accent">861 automated tests</strong> pass (796 Java + 65 JS)</li>
+        <li>Property-based tests (jqwik) on scoring, windows, read-only invariants</li>
+        <li>Working pre-exec BLOCK over a Unix domain socket</li>
+      </ul>
+    </div>
+    <div class="col-box">
+      <h4>Impact</h4>
+      <ul style="font-size:0.8em;">
+        <li>Blocks agent-hijack, paste, reverse-shell, tamper — pre-execution</li>
+        <li>Every verdict explained &amp; auditable (<code>/api/explain</code>)</li>
+        <li>Per-user risk posture at a glance for SOC triage</li>
+      </ul>
+    </div>
+    <div class="col-box">
+      <h4>Scalable</h4>
+      <ul style="font-size:0.8em;">
+        <li>Deterministic components give sub-ms verdicts; LLM is additive</li>
+        <li>Profile assembly: bounded thread pool, per-block 5s cutoff, Record_Cap=500</li>
+        <li>Config-gated guardrails; hot-reloadable thresholds; multi-host ready</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:14px;padding:10px 14px;background:var(--bg-secondary);border-radius:6px;font-size:0.78em;">
+    <strong class="accent">One engine, three problem statements:</strong> intent-safe execution, NL operations assistant (safety-scored), and behavioral threat detection with explainability — all fall out of one divergence engine.
+  </div>
+</section>
+
+<!-- NEW SLIDE: Future Scope & Conclusion -->
+<section>
+  <h2>Future Scope &amp; Conclusion</h2>
+  <div class="future-cols">
+    <div class="future-col">
+      <h4>Where it goes next</h4>
+      <ul style="font-size:0.82em;">
+        <li>CERT-In / government SOC integration &amp; central policy, distributed hooks</li>
+        <li>Kubernetes pod-level intent enforcement (kubectl/helm gates)</li>
+        <li>Federated behavioral profiles across org boundaries</li>
+        <li>Risk-trend anomaly alerts &amp; per-team dashboards on the profiling layer</li>
+      </ul>
+    </div>
+    <div class="future-col">
+      <h4>Why it holds up</h4>
+      <ul style="font-size:0.82em;">
+        <li>Ordered-rule chain extends without touching existing layers (Open-Closed)</li>
+        <li>Provider-agnostic LLM — one config line switches Ollama ⇄ Gemini</li>
+        <li>Read-only analytics can grow without ever risking enforcement</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:18px;padding:12px 16px;background:rgba(0,212,170,0.06);border-left:4px solid var(--accent);border-radius:0 6px 6px 0;font-size:0.82em;">
+    <strong class="accent">Conclusion:</strong> IntentGuard is the first pre-execution, intent-aware, sovereign-AI firewall for the Linux command layer — tamper-proof, explainable in 11 Bharat languages, and now with per-user forensic risk profiling — proven by 861 passing tests.
   </div>
 </section>
 

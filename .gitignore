@@ -1,6 +1,8 @@
 # Maven
 target/
 !.mvn/wrapper/maven-wrapper.jar
+# Compiled class files (never commit build artifacts into the source tree)
+*.class
 
 # Python venvs
 .venv/
